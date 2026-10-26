@@ -1,0 +1,19 @@
+--- a/ui/ozone/platform/x11/x11_surface_factory.cc
++++ b/ui/ozone/platform/x11/x11_surface_factory.cc
+@@ -174,8 +174,16 @@
+ 
+ std::vector<gl::GLImplementationParts>
+ X11SurfaceFactory::GetAllowedGLImplementations() {
++  // Termux/Android patch: also allow the system EGL/GLES2 path.
++  // The Termux chromium build is locked to ANGLE, but ANGLE cannot initialise
++  // here: Turnip exposes Vulkan 1.0 while ANGLE requires >= 1.1. The system
++  // EGL (/system/lib64/libEGL.so) does work and reports the real GPU:
++  //   GL_VENDOR = Qualcomm, GL_RENDERER = Adreno (TM) 610, GLES 3.2
++  // Allowing kGLImplementationEGLGLES2 lets --use-gl=egl render on the real
++  // Adreno instead of falling back to CPU (Mesa llvmpipe).
+   return std::vector<gl::GLImplementationParts>{
+       gl::GLImplementationParts(gl::kGLImplementationEGLANGLE),
++      gl::GLImplementationParts(gl::kGLImplementationEGLGLES2),
+   };
+ }
+ 
