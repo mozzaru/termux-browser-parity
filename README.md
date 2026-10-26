@@ -105,6 +105,27 @@ Pick one identity and make every layer agree. For "Android phone" that means
 chromium-real with `--user-agent` + CDP `Network.setUserAgentOverride` for the
 client hints (`sec-ch-ua-platform` stays `Linux` otherwise — see `bin/pw-real`).
 
+
+## WebGL works (added 2026-10-26)
+
+The packaged `libEGL.so` is a 5.8 KB stub with no `egl*` exports, which crashes
+ANGLE's GPU process. Replacing it with the system EGL and running under an X
+display gives real WebGL:
+
+| metric | value |
+|---|---|
+| webgl | `true` |
+| renderer | `ANGLE (Mesa, llvmpipe (LLVM 21.1.8 128 bits), OpenGL 4.6)` |
+| readPixels | `[0, 255, 0, 255]` |
+| JA4 | `t13d1517h2_8daaf6152771_cb7bf5808d99` (== Chrome 152) |
+
+Install: `fix-gl` then `chromium-webgl`. Details in
+`patches/egl-system-symlink.md`.
+
+This does **not** defeat DataDome on `github.com/signup`: that block is keyed to
+the egress IP (`x-dd-b: 259`, highest bucket) and applies to every client,
+including the device's own Samsung Browser. `/login` stays 200.
+
 ## CI
 
 `.github/workflows/` builds the patched chromium on `ubuntu-24.04` (fast, cached)

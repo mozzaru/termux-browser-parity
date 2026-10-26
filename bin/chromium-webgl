@@ -1,0 +1,20 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Termux chromium with WORKING WebGL.
+#
+# Why this is needed:
+#   $PREFIX/lib/chromium/libEGL.so is a 5.8 KB Android stub with zero egl*
+#   exports, so ANGLE crashes the GPU process (exit_code=11) and chrome://gpu
+#   reports "WebGL: Disabled". Replace it with the system EGL (which dlopen's
+#   fine from Termux) and give ANGLE a display; WebGL then works:
+#     renderer: ANGLE (Mesa, llvmpipe (LLVM 21.1.8 128 bits), OpenGL 4.6)
+#     pixel   : [0,255,0,255]  (real render, not a spoof)
+#
+# Requires: fix-gl (patches the EGL symlinks) and an X display.
+: "${DISPLAY:=:5}"
+export DISPLAY
+exec /data/data/com.termux/files/usr/lib/chromium/chrome \
+  --no-sandbox --disable-dev-shm-usage --no-zygote \
+  --use-gl=angle --use-angle=gl --ignore-gpu-blocklist \
+  --disable-features=AddTLSServerHandshakePadding \
+  --disable-blink-features=AutomationControlled \
+  "$@"
