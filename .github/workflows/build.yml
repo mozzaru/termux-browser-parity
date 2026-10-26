@@ -24,14 +24,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tag: ["156.0.8078.47", "main"]
+        include:
+          - ref: refs/tags/156.0.8078.47
+            label: 156.0.8078.47
+          - ref: main
+            label: main
     steps:
       - uses: actions/checkout@v4
       - name: Fetch the one file the patch touches
         run: |
           set -euo pipefail
           mkdir -p src/net/socket
-          curl -fsSL "https://chromium.googlesource.com/chromium/src/+/refs/tags/${{ matrix.tag }}/net/socket/ssl_client_socket_impl.cc?format=TEXT" \
+          curl -fsSL "https://chromium.googlesource.com/chromium/src/+/${{ matrix.ref }}/net/socket/ssl_client_socket_impl.cc?format=TEXT" \
             | base64 -d > src/net/socket/ssl_client_socket_impl.cc
           wc -l src/net/socket/ssl_client_socket_impl.cc
       - name: Apply patches/chromium-no-mldsa-sigalgs.patch
@@ -51,7 +55,17 @@ jobs:
                      SSL_SIGN_RSA_PKCS1_SHA512; do
             grep -q "$sig" "$f" || { echo "::error::lost $sig"; exit 1; }
           done
-          echo "patch verified on ${{ matrix.tag }}"
+          # the array must still be well formed
+          python3 - <<'CHECK'
+          import re, pathlib
+          src = pathlib.Path("src/net/socket/ssl_client_socket_impl.cc").read_text()
+          m = re.search(r"kVerifyPrefs\[\] = \{(.*?)\};", src, re.S)
+          assert m, "kVerifyPrefs array missing"
+          entries = [x.strip() for x in m.group(1).split(",") if x.strip()]
+          assert len(entries) == 8, f"expected 8 sigalgs, got {len(entries)}: {entries}"
+          print("kVerifyPrefs:", entries)
+          CHECK
+          echo "patch verified on ${{ matrix.label }}"
 
   playwright-patch-applies:
     name: playwright android-cache patch applies
@@ -61,25 +75,32 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
-      - name: Fetch upstream registry file
+      - name: Fetch upstream playwright-core
         run: |
           set -euo pipefail
-          mkdir -p src/lib/server/registry
           ver=$(npm view playwright-core version)
-          echo "playwright-core $ver"
+          echo "playwright-core $ver" | tee version.txt
           npm pack "playwright-core@$ver" --silent >/dev/null
           tar -xzf playwright-core-*.tgz
-          cp package/lib/server/registry/index.js src/lib/server/registry/index.js
-      - name: Assert android throws before the patch
+      - name: Assert android still throws before the patch
         run: |
           set -euo pipefail
-          grep -q "Unsupported platform: ' + process.platform" src/lib/server/registry/index.js \
-            && echo "upstream still throws on android (expected)"
-      - name: Apply and verify
+          target=package/lib/serverRegistry.js
+          [ -f "$target" ] || target=package/lib/server/registry/index.js
+          echo "target=$target" >> "$GITHUB_ENV"
+          grep -q "Unsupported platform" "$target"
+          echo "upstream still throws on android (expected)"
+      - name: Apply sed recipe and verify
         run: |
           set -euo pipefail
-          cd src
-          patch -p1 --fuzz=3 < ../patches/playwright-android-cache.patch
-          node --check lib/server/registry/index.js
-          grep -q "process.platform === 'android'" lib/server/registry/index.js
-          echo "android no longer hits the throw"
+          sed -i -f patches/playwright-android-cache.sed "$target"
+          node --check "$target"
+          grep -q "process.platform === \"android\"\|process.platform === 'android'" "$target"
+          echo "android no longer reaches the throw"
+      - name: Assert the patch file still matches the pinned 1.64 layout
+        run: |
+          set -euo pipefail
+          rm -rf pinned && mkdir -p pinned/lib
+          npm pack "playwright-core@1.64.1" --silent >/dev/null
+          tar -xzf playwright-core-1.64.1.tgz -C pinned --strip-components=1
+          cd pinned && patch -p1 --dry-run < ../patches/playwright-android-cache-1.64.patch

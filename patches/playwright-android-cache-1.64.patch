@@ -1,0 +1,11 @@
+--- a/lib/serverRegistry.js
++++ b/lib/serverRegistry.js
+@@ -1912,7 +1912,7 @@
+   });
+ }
+ function computeDefaultCacheDirectory() {
+-  if (process.platform === "linux")
++  if (process.platform === "linux" || process.platform === "android")
+     return process.env.XDG_CACHE_HOME || import_path2.default.join(import_os2.default.homedir(), ".cache");
+   if (process.platform === "darwin")
+     return import_path2.default.join(import_os2.default.homedir(), "Library", "Caches");
