@@ -80,6 +80,31 @@ Android-Chrome value measured on this device. That is `patches/chromium-no-mldsa
 For camoufox there is nothing to fork: it already matches Firefox. A fork would
 only be worth it to add **Chrome** TLS emulation, which is a different project.
 
+## Verified end-to-end (on device, 2026-10-26)
+
+```
+chromium-real  -> t13d1517h2_8daaf6152771_cb7bf5808d99   == Chrome 152
+pw-real        -> t13d1517h2_8daaf6152771_cb7bf5808d99   == Chrome 152
+camoufox clean -> t13d1517h2_8daaf6152771_3cbfd9057e0d   == Firefox 154/155
+```
+
+`chromium-real` and `pw-real` are installed in `$PREFIX/bin`. Camoufox needed
+only an empty profile — `profClean` with no `user.js` reproduces the reference.
+
+## The mismatch that actually gets you flagged
+
+Camoufox's TLS is Firefox; its default UA is Firefox desktop Linux. If you spoof
+the UA to Android Chrome while leaving TLS alone, the layers disagree:
+
+| layer | camoufox default | Android Chrome |
+|---|---|---|
+| JA4 | `t13d1517h2_..._3cbfd9057e0d` (Firefox) | `t13d1516h2_..._d8a2da3f94cd` |
+| UA | Firefox/156.0 desktop | Chrome/xxx Mobile |
+
+Pick one identity and make every layer agree. For "Android phone" that means
+chromium-real with `--user-agent` + CDP `Network.setUserAgentOverride` for the
+client hints (`sec-ch-ua-platform` stays `Linux` otherwise — see `bin/pw-real`).
+
 ## CI
 
 `.github/workflows/` builds the patched chromium on `ubuntu-24.04` (fast, cached)
