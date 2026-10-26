@@ -145,6 +145,35 @@ Reported renderer is spoofed per identity (`Intel HD 400` / `AMD R9 200` /
 
 See `patches/camoufox-gbm-soname.md`.
 
+
+## Playwright: Python and Node (added 2026-10-26)
+
+Both work now, with WebGL.
+
+| path | blocker | fix |
+|---|---|---|
+| Python `playwright` | `driver/node` is a **glibc** aarch64 binary (`/lib/ld-linux-aarch64.so.1`); Termux is Bionic, so exec fails | `fix-playwright-node` swaps it for a shim to Termux node |
+| Node `playwright-core` | throws `Unsupported platform: android` | `fix-playwright-nodejs` treats android as linux |
+
+```bash
+fix-gl && fix-playwright-node && fix-playwright-nodejs
+Xvfb :5 -screen 0 1280x900x24 &
+DISPLAY=:5 pw-webgl https://example.com
+```
+
+```
+webgl    : true
+renderer : ANGLE (Mesa, llvmpipe (LLVM 21.1.8 128 bits), OpenGL 4.6)
+pixel    : [0, 0, 255, 255]
+maxTex   : 16384
+JA4      : t13d1517h2_8daaf6152771_cb7bf5808d99  (== Chrome 152)
+```
+
+Note: do **not** use `termux_playwright.launch_sync` for GPU work — it injects
+`--disable-gpu`. `pw-webgl` calls `playwright.sync_api` directly.
+
+Details: `patches/playwright-python-node-shim.md`.
+
 ## CI
 
 `.github/workflows/` builds the patched chromium on `ubuntu-24.04` (fast, cached)

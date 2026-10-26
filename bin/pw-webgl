@@ -1,0 +1,54 @@
+#!/data/data/com.termux/files/usr/bin/env python3
+"""Python Playwright on Termux with working WebGL.
+
+Requires: fix-playwright-node, fix-gl, an X display, and NO --disable-gpu
+(termux_playwright injects it; this module bypasses that shim entirely).
+
+    pw-webgl https://example.com          # prints title + fingerprint
+"""
+import json, os, sys
+
+CHROME = "/data/data/com.termux/files/usr/lib/chromium/chrome"
+ARGS = [
+    "--no-sandbox", "--disable-dev-shm-usage", "--no-zygote",
+    "--use-gl=angle", "--use-angle=gl", "--ignore-gpu-blocklist",
+    "--disable-features=AddTLSServerHandshakePadding",
+    "--disable-blink-features=AutomationControlled",
+    "--window-size=1280,900",
+]
+
+def launch(headless=False, extra=(), viewport=(1280, 900), **ctx):
+    from playwright.sync_api import sync_playwright
+    pw = sync_playwright().start()
+    browser = pw.chromium.launch(executable_path=CHROME, headless=headless,
+                                 args=[*ARGS, *extra])
+    context = browser.new_context(
+        viewport={"width": viewport[0], "height": viewport[1]}, **ctx)
+    return pw, browser, context
+
+PROBE = """() => {
+  const cv = document.createElement('canvas'); cv.width = 64; cv.height = 64;
+  const gl = cv.getContext('webgl');
+  const out = { webgl: !!gl };
+  if (gl) {
+    const d = gl.getExtension('WEBGL_debug_renderer_info');
+    gl.clearColor(0, 0, 1, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+    const px = new Uint8Array(4);
+    gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+    out.renderer = d ? gl.getParameter(d.UNMASKED_RENDERER_WEBGL) : null;
+    out.pixel = Array.from(px);
+    out.maxTex = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+  }
+  return out;
+}"""
+
+if __name__ == "__main__":
+    url = sys.argv[1] if len(sys.argv) > 1 else "about:blank"
+    os.environ.setdefault("DISPLAY", ":5")
+    pw, b, c = launch()
+    pg = c.new_page()
+    pg.goto(url, wait_until="domcontentloaded", timeout=90000)
+    pg.wait_for_timeout(1500)
+    print(json.dumps({"url": pg.url, "title": pg.title(),
+                      "fp": pg.evaluate(PROBE)}, indent=1))
+    b.close(); pw.stop()
