@@ -67,6 +67,50 @@ jobs:
           CHECK
           echo "patch verified on ${{ matrix.label }}"
 
+  gles2-patch-applies:
+    name: chromium GLES2 allow-list patch applies
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch x11_surface_factory.cc
+        run: |
+          set -euo pipefail
+          mkdir -p src/ui/ozone/platform/x11
+          curl -fsSL "https://chromium.googlesource.com/chromium/src/+/refs/tags/156.0.8078.47/ui/ozone/platform/x11/x11_surface_factory.cc?format=TEXT" \
+            | base64 -d > src/ui/ozone/platform/x11/x11_surface_factory.cc
+          wc -l src/ui/ozone/platform/x11/x11_surface_factory.cc
+      - name: Apply and assert GLES2 is allowed
+        run: |
+          set -euo pipefail
+          cd src
+          patch -p1 < ../patches/chromium-allow-gles2.patch
+          grep -q "kGLImplementationEGLGLES2" ui/ozone/platform/x11/x11_surface_factory.cc
+          echo "GLES2 now allowed alongside ANGLE"
+
+  human-trajectory:
+    name: human drag trajectory stays in the human band
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Check statistics
+        run: |
+          set -euo pipefail
+          node -e '
+          const { humanTrajectory, stats } = require("./tools/human-drag.js");
+          let ok = true;
+          for (let i = 0; i < 20; i++) {
+            const s = stats(humanTrajectory(0, 0, 222));
+            if (s.m_cnt < 50 || s.m_cnt > 70) { console.error("m_cnt", s.m_cnt); ok = false; }
+            if (s.m_yDspSD < 2) { console.error("m_yDspSD too flat:", s.m_yDspSD); ok = false; }
+            if (s.m_str8 > 0.95) { console.error("m_str8 too straight:", s.m_str8); ok = false; }
+          }
+          if (!ok) process.exit(1);
+          console.log("20 trajectories all inside the human band");
+          '
+
   playwright-patch-applies:
     name: playwright android-cache patch applies
     runs-on: ubuntu-24.04
