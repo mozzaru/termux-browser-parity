@@ -1,0 +1,34 @@
+#!/data/data/com.termux/files/usr/bin/env python3
+"""Playwright on Termux that presents a real Chrome TLS fingerprint.
+
+Two fixes, both measured:
+  1. PLAYWRIGHT_BROWSERS_PATH - unblocks the 'Unsupported platform: android'
+     throw in playwright/driver/package/lib/server/registry/index.js:300.
+  2. --disable-features=AddTLSServerHandshakePadding - drops ext 4832, the only
+     byte that separates the Termux build (t13d1518h2) from Chrome 152
+     (t13d1517h2_8daaf6152771_cb7bf5808d99).
+"""
+import os, sys
+os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH",
+                      os.path.expanduser("~/.cache/ms-playwright"))
+
+from termux_playwright import sync_playwright_termux, launch_sync
+
+REAL_CHROME_ARGS = [
+    "--disable-features=AddTLSServerHandshakePadding",
+    "--disable-blink-features=AutomationControlled",
+]
+
+def launch(headless=True, extra_args=(), **ctx):
+    pw = sync_playwright_termux()
+    p = pw.__enter__()
+    b = launch_sync(p, headless=headless, args=[*REAL_CHROME_ARGS, *extra_args])
+    context = b.new_context(**ctx) if ctx else b.new_context()
+    return pw, b, context
+
+if __name__ == "__main__":
+    pw, b, ctx = launch(headless=True)
+    page = ctx.new_page()
+    page.goto(sys.argv[1] if len(sys.argv) > 1 else "https://tls.peet.ws/api/all")
+    print(page.inner_text("body"))
+    b.close(); pw.__exit__(None, None, None)

@@ -1,0 +1,85 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  fingerprint-tests:
+    name: JA4 regression tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Run measured-fixture tests
+        run: python3 tests/test_fingerprints.py
+
+  patch-applies:
+    name: Chromium 156 patch applies
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        tag: ["156.0.8078.47", "main"]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch the one file the patch touches
+        run: |
+          set -euo pipefail
+          mkdir -p src/net/socket
+          curl -fsSL "https://chromium.googlesource.com/chromium/src/+/refs/tags/${{ matrix.tag }}/net/socket/ssl_client_socket_impl.cc?format=TEXT" \
+            | base64 -d > src/net/socket/ssl_client_socket_impl.cc
+          wc -l src/net/socket/ssl_client_socket_impl.cc
+      - name: Apply patches/chromium-no-mldsa-sigalgs.patch
+        run: |
+          set -euo pipefail
+          cd src
+          patch -p1 --dry-run < ../patches/chromium-no-mldsa-sigalgs.patch
+          patch -p1 < ../patches/chromium-no-mldsa-sigalgs.patch
+      - name: Assert ML-DSA sigalgs are gone and the rest survived
+        run: |
+          set -euo pipefail
+          f=src/net/socket/ssl_client_socket_impl.cc
+          if grep -q "SSL_SIGN_ML_DSA" "$f"; then
+            echo "::error::ML-DSA sigalgs still present"; exit 1
+          fi
+          for sig in SSL_SIGN_ECDSA_SECP256R1_SHA256 SSL_SIGN_RSA_PSS_RSAE_SHA256 \
+                     SSL_SIGN_RSA_PKCS1_SHA512; do
+            grep -q "$sig" "$f" || { echo "::error::lost $sig"; exit 1; }
+          done
+          echo "patch verified on ${{ matrix.tag }}"
+
+  playwright-patch-applies:
+    name: playwright android-cache patch applies
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Fetch upstream registry file
+        run: |
+          set -euo pipefail
+          mkdir -p src/lib/server/registry
+          ver=$(npm view playwright-core version)
+          echo "playwright-core $ver"
+          npm pack "playwright-core@$ver" --silent >/dev/null
+          tar -xzf playwright-core-*.tgz
+          cp package/lib/server/registry/index.js src/lib/server/registry/index.js
+      - name: Assert android throws before the patch
+        run: |
+          set -euo pipefail
+          grep -q "Unsupported platform: ' + process.platform" src/lib/server/registry/index.js \
+            && echo "upstream still throws on android (expected)"
+      - name: Apply and verify
+        run: |
+          set -euo pipefail
+          cd src
+          patch -p1 --fuzz=3 < ../patches/playwright-android-cache.patch
+          node --check lib/server/registry/index.js
+          grep -q "process.platform === 'android'" lib/server/registry/index.js
+          echo "android no longer hits the throw"

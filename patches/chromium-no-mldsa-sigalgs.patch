@@ -1,0 +1,12 @@
+--- a/net/socket/ssl_client_socket_impl.cc
++++ b/net/socket/ssl_client_socket_impl.cc
+@@ -795,9 +795,6 @@
+   // TODO(crbug.com/boringssl/699): Once the default is flipped in BoringSSL, we
+   // no longer need to override it.
+   static const uint16_t kVerifyPrefs[] = {
+-      SSL_SIGN_ML_DSA_44,
+-      SSL_SIGN_ML_DSA_65,
+-      SSL_SIGN_ML_DSA_87,
+       SSL_SIGN_ECDSA_SECP256R1_SHA256,
+       SSL_SIGN_RSA_PSS_RSAE_SHA256,
+       SSL_SIGN_RSA_PKCS1_SHA256,

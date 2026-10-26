@@ -1,0 +1,8 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Termux chromium -> real Chrome JA4. Measured: t13d1517h2_8daaf6152771_cb7bf5808d99 == Chrome 152.
+# Cause: this build ships kAddTLSServerHandshakePadding enabled, emitting ext 4832 (server_padding).
+# Real Chrome never sends it. One flag kills it; nothing else in the hello differs.
+exec /data/data/com.termux/files/usr/bin/chromium-browser \
+  --disable-features=AddTLSServerHandshakePadding \
+  --disable-blink-features=AutomationControlled \
+  "$@"
