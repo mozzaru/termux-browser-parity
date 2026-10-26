@@ -1,0 +1,13 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Camoufox with WORKING WebGL on Termux.
+#
+# Requires the soname symlinks created by fix-gl-camoufox:
+#   $PREFIX/lib/libgbm.so.1 -> libgbm.so
+#   $PREFIX/lib/libdrm.so.2 -> libdrm.so
+# plus an X display. WebGL then renders through Mesa/llvmpipe while camoufox
+# spoofs the reported renderer per identity (that is its job, not a bug).
+: "${DISPLAY:=:5}"
+export DISPLAY
+export LIBGL_ALWAYS_SOFTWARE=1
+export GALLIUM_DRIVER=llvmpipe
+exec /data/data/com.termux/files/usr/opt/camoufox/camoufox "$@"

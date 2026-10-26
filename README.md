@@ -126,6 +126,25 @@ This does **not** defeat DataDome on `github.com/signup`: that block is keyed to
 the egress IP (`x-dd-b: 259`, highest bucket) and applies to every client,
 including the device's own Samsung Browser. `/login` stays 200.
 
+
+## Camoufox WebGL (added 2026-10-26)
+
+Different failure than chromium: `libxul.so` needs `libgbm.so.1` and
+`libdrm.so.2`, which Termux does not ship as versioned sonames.
+
+```sh
+fix-gl-camoufox                      # symlink the two sonames
+DISPLAY=:5 LIBGL_ALWAYS_SOFTWARE=1 camoufox-webgl
+```
+
+Verified render: shader links, `drawArrays` triangle reads back
+`[255,255,0,255]`, all four clear colours exact, `MAX_TEXTURE_SIZE` 8192.
+JA4 unchanged at `t13d1517h2_8daaf6152771_3cbfd9057e0d` (== Firefox 154/155).
+Reported renderer is spoofed per identity (`Intel HD 400` / `AMD R9 200` /
+`Apple M1` across runs) — by design.
+
+See `patches/camoufox-gbm-soname.md`.
+
 ## CI
 
 `.github/workflows/` builds the patched chromium on `ubuntu-24.04` (fast, cached)
